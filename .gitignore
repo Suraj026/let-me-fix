@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+.env
+venv/
+chromadb_data/
+dist/
+*.egg-info/
+thoughts/

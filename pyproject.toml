@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0.0",]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "let-me-fix"
+version = "0.1.0"
+description = "Autonomous debugging agent that verifies fixes in a Docker sandbox"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  {name = "Suraj Kumar"}
+]
+dependencies = [
+    "typer>=0.12.0",
+    "langgraph>=1.0.0",
+    "langchain-core>=1.0.0",
+    "chromadb>=1.0.0",
+    "tree-sitter>=0.23.0",
+    "tree-sitter-python>=0.23.0",
+    "google-genai>=2.0.0",
+    "pydantic>=2.0.0",
+    "nbconvert>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+let-me-fix = "src.cli:app"
