@@ -1,1 +1,4 @@
-from library import function
+from utils import function
+
+def run():
+    return function()

@@ -1,7 +1,8 @@
 Traceback (most recent call last):
-  File "/home/suraj/Desktop/let-me-fix/tests/corpus/type_error/main.py", line 4, in <module>
-    add(1, "2")
-  File "/home/suraj/Desktop/let-me-fix/tests/corpus/type_error/main.py", line 2, in add
-    return a + b
-           ~~^~~
-TypeError: unsupported operand type(s) for +: 'int' and 'str'
+  File "/home/suraj/Desktop/let-me-fix/tests/corpus/type_error/main.py", line 5, in <module>
+    result = process_data("hello")
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/suraj/Desktop/let-me-fix/tests/corpus/type_error/main.py", line 2, in process_data
+    return data * data  # expects int, might get str
+           ~~~~~^~~~~~
+TypeError: can't multiply sequence by non-int of type 'str'

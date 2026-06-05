@@ -1,4 +1,6 @@
-def add(a, b):
-    return a + b
+def process_data(data):
+    return data * data  # expects int, might get str
 
-add(1, "2")
+if __name__ == "__main__":
+    result = process_data("hello")
+    print(result)
