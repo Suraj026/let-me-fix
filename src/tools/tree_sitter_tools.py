@@ -90,6 +90,62 @@ def get_function_signature(file_path: str, function_name: str) -> str | None:
 
     return None  # Function not found
 
+def get_import_graph(file_path: str) -> dict[str, list[str]] | None:
+    """
+    Extract an import graph from a Python file using tree-sitter.
+    Returns a dictionary mapping module names to lists of imported modules.
+    """
+    source_code = _read_file(file_path)
+    if source_code is None:
+        return None
+
+    parser = _get_parser()
+    tree = parser.parse(bytes(source_code, "utf-8"))
+
+     # Query 1: "import os" or "import os, sys" - find module names
+    import_query = Query(PY_LANGUAGE, """
+        (import_statement
+            name: (dotted_name) @module)
+    """)
+    
+    # Query 2: "from os import path" - find module + imported names  
+    from_query = Query(PY_LANGUAGE, """
+        (import_from_statement
+            module_name: (dotted_name) @module
+            name: (dotted_name) @name)
+    """)
+
+    result = {}
+    # Process "import X" statements
+    cursor = QueryCursor(import_query)
+    for _pattern_idx, captures_dict in cursor.matches(tree.root_node):
+        for node in captures_dict.get("module", []):
+            module = source_code[node.start_byte:node.end_byte]
+            # "import os, sys" is stored as separate dotted_names
+            if module not in result:
+                result[module] = []
+
+     # Process "from X import Y" statements  
+    cursor = QueryCursor(from_query)
+    for _pattern_idx, captures_dict in cursor.matches(tree.root_node):
+        modules = captures_dict.get("module", [])
+        names = captures_dict.get("name", [])
+        
+        # Get the module name (all dotted_name nodes before the names)
+        module_text = ""
+        if modules:
+            module_text = source_code[modules[-1].start_byte:modules[-1].end_byte]
+        
+        if module_text:
+            if module_text not in result:
+                result[module_text] = []
+            for name_node in names:
+                imported = source_code[name_node.start_byte:name_node.end_byte]
+                if imported not in result[module_text]:
+                    result[module_text].append(imported)
+
+    return result
+
 
 def extract_call_graph(file_path: str) -> dict[str, list[str]] | None:
     """

@@ -1,5 +1,10 @@
 import pytest
-from src.tools.tree_sitter_tools import get_function_code, get_function_signature, extract_call_graph
+from src.tools.tree_sitter_tools import (
+    get_function_code, 
+    get_function_signature, 
+    extract_call_graph, 
+    get_import_graph
+)
 
 def test_get_function_code():
     code = get_function_code("tests/corpus/type_error/main.py", "process_data")
@@ -17,6 +22,15 @@ def test_function_not_found():
     code = get_function_code("tests/corpus/type_error/main.py", "non_existent_function")
     assert code is None
 
+def test_get_import_graph():
+    imports = get_import_graph("tests/corpus/import_error/main.py")
+    assert "utils" in imports
+    assert "function" in imports["utils"]
+
+
+def test_get_import_graph_no_imports():
+    imports = get_import_graph("tests/corpus/import_error/utils.py")
+    assert imports == {}
 
 def test_extract_call_graph():
     call_graph = extract_call_graph("tests/corpus/type_error/main.py")
