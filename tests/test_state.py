@@ -11,6 +11,7 @@ def test_initial_state():
     assert state.error_signature is None
     assert state.manifest == []
     assert state.error is None
+    assert state.file_contents == {}
 
 
 def test_state_with_signature():

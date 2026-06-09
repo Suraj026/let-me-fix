@@ -26,6 +26,7 @@ class GraphState(BaseModel):
     # Agent 2 output (Context Collector)
     relevant_files: list[ScoredFile] = []
     chroma_collection_id: Optional[str] = None
+    file_contents: dict[str, str] = {}
 
     # Agent 3 output (Hypothesis)
     hypotheses: list[Hypothesis] = []
