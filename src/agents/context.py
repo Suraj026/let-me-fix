@@ -8,7 +8,6 @@ from src.models.manifest import ScoredFile, FileInfo
 from src.models.events import TraceEvent
 from src.tools.code_search import grep_files
 from src.tools.tree_sitter_tools import (
-    get_function_code,
     get_import_graph,
     extract_call_graph,
 )
@@ -146,7 +145,6 @@ def run_context_collector(state: GraphState) -> dict:
         )
     )
 
-    manifest_paths = {f.path for f in manifest}
     chroma = ChromaStore()
 
     # Build reverse import map
