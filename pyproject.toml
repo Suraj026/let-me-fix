@@ -29,5 +29,8 @@ dev = [
     "pytest>=8.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["src*"]
+
 [project.scripts]
 let-me-fix = "src.cli:app"

@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from src.graph.state import GraphState
 from src.agents.hypothesis import run_hypothesis
+from src.llm.model import LLMResponse
 from src.models.trace import ErrorSignature
 from src.models.manifest import FileInfo, ScoredFile
 from src.models.hypothesis import Hypothesis
@@ -56,16 +57,12 @@ def test_hypothesis_requires_context():
 
 @patch("src.agents.hypothesis.LLMClient")
 def test_hypothesis_generates_from_context(mock_llm_cls, state_with_context):
-    """Should produce hypotheses when LLM returns valid output."""
+    """Should produce hypotheses when LLM returns valid JSON."""
     mock_instance = MagicMock()
-    mock_instance.generate.return_value = """
-        Hypothesis 1: Type mismatch in calculate()
-        - The function `calculate(a, b)` adds `a` and `b` directly.
-        - When `b` is a string ("hello"), Python raises TypeError.
-        - **Confidence: 0.9**
-        - Evidence: main.py line 17
-        - Fix: ensure both operands are the same type before adding.
-        """
+    mock_instance.generate.return_value = LLMResponse(
+        text='{"hypotheses": [{"description": "The function calculate(a, b) adds a and b directly. When b is a string Python raises TypeError.", "confidence": 0.9, "evidence_files": ["main.py"], "verification_steps": ["Inspect line 17 in main.py", "Check the type of b passed to calculate"]}]}',
+        model="test-model",
+    )
     mock_llm_cls.return_value = mock_instance
 
     updates = run_hypothesis(state_with_context)
