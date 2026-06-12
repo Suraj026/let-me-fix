@@ -1,0 +1,12 @@
+venv
+.venv
+__pycache__
+*.pyc
+.git
+.env
+.planning
+.agents
+.opencode
+node_modules
+.phases
+*.md
