@@ -38,6 +38,7 @@ class GraphState(BaseModel):
     patch_applied: bool = False
     verification: Optional[dict] = None
     retry_count: int = 0
+    max_retries: int = 3
     report: Optional[str] = None
 
     # Streaming and error handling
