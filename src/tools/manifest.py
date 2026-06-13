@@ -7,7 +7,7 @@ from src.models.manifest import FileInfo
 
 PYTHON_EXTENSIONS = {".py", ".pyw", ".pyx"}
 NOTEBOOK_EXTENSIONS = ".ipynb"
-SKIP_DIRS = {".venv", ".env", "__pycache__", "site-packages", "dist-packages", ".git", "node_modules"}
+SKIP_DIRS = {".venv", ".env", "__pycache__", "site-packages", "dist-packages", ".git", "node_modules", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 
 def detect_language(filename : str) -> str:
     """

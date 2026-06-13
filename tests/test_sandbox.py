@@ -71,37 +71,6 @@ def test_sandbox_exec_run_timeout(temp_git_project):
         assert result["exit_code"] == -1
         assert "timed out" in result["output"].lower()
 
-def test_sandbox_apply_patch(temp_git_project):
-    """apply_patch applies a valid unified-diff to the container."""
-    # Make a change and create a diff
-    with open(os.path.join(temp_git_project, "src", "calc.py"), "w") as f:
-        f.write("def add(a, b):\n    return a + b  # fixed comment\n")
-    
-    diff = subprocess.run(
-        ["git", "diff"], cwd=temp_git_project,
-        capture_output=True, 
-        text=True
-        ).stdout
-
-    # Revert the change on host
-    subprocess.run(
-        ["git", "checkout", "--", "."], 
-        cwd=temp_git_project, 
-        capture_output=True
-    )
-
-    with DockerSandbox(temp_git_project) as sandbox:
-        result = sandbox.apply_patch(diff)
-        assert result["success"] is True, f"Patch failed: {result['output']}"
-        assert result["exit_code"] == 0
-
-def test_sandbox_run_tests(temp_git_project):
-    """run_tests runs pytest inside container and returns result."""
-    with DockerSandbox(temp_git_project) as sandbox:
-        result = sandbox.run_tests(timeout=30)
-        assert result["success"] is True, f"Tests failed: {result['test_output']}"
-        assert result["exit_code"] == 0
-
 def test_sandbox_cleanup_on_error(temp_git_project):
     """Container is removed even if an exception occurs inside the block."""
     container_name = None

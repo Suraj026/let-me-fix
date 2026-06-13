@@ -1,4 +1,4 @@
-"""Docker-based sandbox for isolated patch apply and test execution."""
+"""Docker-based sandbox for isolated fix verification and test execution."""
 
 import subprocess
 import tempfile
@@ -14,7 +14,7 @@ class DockerSandbox:
     """
 
     def __init__(self, project_path: str, timeout: int = 60, image: str =  "let-me-fix-sandbox"):
-        self.project_path = project_path
+        self.project_path = os.path.abspath(project_path)
         self.timeout = timeout
         self.image = image
         suffix = "".join(random.choices(string.ascii_lowercase, k=8))
@@ -50,11 +50,15 @@ class DockerSandbox:
             )
             if build.returncode != 0:
                 raise RuntimeError(f"Failed to build Docker image: {build.stderr.strip()}")
-    
-        # 3. Start container with project bind-mounted
+        
+        # 3. Start container with project mounted READ-ONLY
+        #    Read-only mount prevents accidental writes to the host filesystem.
+        #    write_files() copies the project to a writable temp dir inside the container.
         start = subprocess.run(
-            ["docker", "run", "-d", "--name", self._container_name, "-v", f"{self.project_path}:/workspace",
-            "--user", f"{os.getuid()}:{os.getgid()}", self.image, "sleep", "infinity"], 
+            ["docker", "run", "-d", "--name", self._container_name,
+             "-v", f"{self.project_path}:/workspace:ro",
+             "--user", f"{os.getuid()}:{os.getgid()}",
+             self.image, "sleep", "infinity"], 
             capture_output=True, 
             text=True
         )
@@ -73,9 +77,11 @@ class DockerSandbox:
             self._container_id = None
         return False  # Don't suppress exceptions
     
-    def exec_run(self, cmd: list[str], timeout: int = 60) -> dict:
-        """Run a command inside the container. Returns {exit_code, output}."""
-        docker_cmd = ["docker", "exec", self._container_id] + cmd 
+    def exec_run(self, cmd: list[str], timeout: int = 60, workdir: str = "/workspace") -> dict:
+        """Run a command inside the container. Returns {exit_code, output}.
+        The workdir defaults to /workspace (where the project is bind-mounted).
+        """
+        docker_cmd = ["docker", "exec", "--workdir", workdir, self._container_id] + cmd 
         try:
             result = subprocess.run(
                 docker_cmd,
@@ -93,65 +99,83 @@ class DockerSandbox:
                 "output" : f"Command timed out after {timeout} seconds"
             }
         
-    def apply_patch(self, patch_content: str) -> dict:
-        """Write patch to temp file, copy into container, git-apply.
-        Returns {success, output, exit_code}."""
-        
-        # Write patch to host temp file
-        with tempfile.NamedTemporaryFile("w", suffix=".diff", delete=False) as f:
-            f.write(patch_content)
-            patch_path = f.name
-        try:
-            # Cop yinto container
-            cp = subprocess.run(
-                ["docker", "cp", patch_path, f"{self._container_id}:/workspace/patch.diff"],
-                capture_output=True,
-                text=True
-            )
-            if cp.returncode != 0:
-                return {
-                    "success": False,
-                    "output": f"Failed to copy patch into container: {cp.stderr.strip()}",
-                    "exit_code": cp.returncode
-                }
-            # Dry run check first
-            check = subprocess.run(
-                ["docker", "exec", self._container_id, "git", "apply", "--check", "/workspace/patch.diff"],
-                capture_output=True,
-                text=True
-            )
-            if check.returncode != 0:
-                return {
-                    "success": False,
-                    "output": f"Patch dry run failed: {check.stderr.strip()}",
-                    "exit_code": check.returncode
-                }
-            
-            # Apply patch
-            apply = subprocess.run(
-                ["docker", "exec", self._container_id, "git", "apply", "/workspace/patch.diff"],
-                capture_output=True,
-                text=True
-            )
-            return {
-                "success": apply.returncode == 0,
-                "output": (apply.stdout + apply.stderr).strip(),
-                "exit_code": apply.returncode
-            }
-        finally:
-            os.unlink(patch_path)  # Clean up temp file
+    def write_files(self, files: dict[str, str]) -> dict:
+        """Write multiple files into a writable workspace inside the container.
 
-    def run_tests(self, timeout: int = 60) -> dict:
-        """Run pytest inside container. Returns {success, test_output, exit_code}."""
-        result = self.exec_run(
-            ["python", "-m", "pytest", "-x", "--tb=short"],
-            timeout=timeout
+        The project is mounted read-only at /workspace.  This method:
+        1. Creates a writable temp dir inside the container
+        2. Copies the entire project into it (so all files are available)
+        3. Overwrites only the files in ``files`` with the corrected content
+        4. Sets ``self._writable_workspace`` so subsequent commands run from there
+        
+        Each key is a relative filepath (e.g. ``main.py`` or
+        ``tests/corpus/type_error/main.py``), and the value is the
+        full corrected file content.
+        
+        Returns {success, writable_workspace, written, errors}
+        """
+        import tempfile
+        errors: dict[str, str] = {}
+        success_count = 0
+
+        # 1. Create writable temp dir inside container
+        suffix = "".join(random.choices(string.ascii_lowercase, k=8))
+        writable_dir = f"/tmp/lmf-workspace-{suffix}"
+        mkdir = subprocess.run(
+            ["docker", "exec", self._container_id, "mkdir", "-p", writable_dir],
+            capture_output=True, text=True,
         )
+        if mkdir.returncode != 0:
+            return {
+                "success": False,
+                "written": 0,
+                "errors": {"__workspace__": mkdir.stderr.strip()},
+            }
+
+        # 2. Copy project files from read-only mount into writable dir
+        cp_ret = subprocess.run(
+            ["docker", "exec", self._container_id, "cp", "-a", "/workspace/.", f"{writable_dir}/"],
+            capture_output=True, text=True,
+        )
+        if cp_ret.returncode != 0:
+            return {
+                "success": False,
+                "written": 0,
+                "errors": {"__workspace__": cp_ret.stderr.strip()},
+            }
+
+        # 3. Write fixed files into the writable workspace
+        for fpath, content in files.items():
+            with tempfile.NamedTemporaryFile("w", delete=False) as f:
+                f.write(content)
+                host_path = f.name
+            try:
+                container_path = f"{writable_dir}/{fpath.lstrip('/')}"
+                parent = os.path.dirname(container_path)
+                if parent and parent != writable_dir:
+                    subprocess.run(
+                        ["docker", "exec", self._container_id, "mkdir", "-p", parent],
+                        capture_output=True, text=True,
+                    )
+                cp = subprocess.run(
+                    ["docker", "cp", host_path, f"{self._container_id}:{container_path}"],
+                    capture_output=True, text=True,
+                )
+                if cp.returncode != 0:
+                    errors[fpath] = cp.stderr.strip()
+                else:
+                    success_count += 1
+            finally:
+                os.unlink(host_path)
+
+        self._writable_workspace = writable_dir
         return {
-            "success": result["exit_code"] == 0,
-            "test_output": result["output"],
-            "exit_code": result["exit_code"]
+            "success": len(errors) == 0,
+            "writable_workspace": writable_dir,
+            "written": success_count,
+            "errors": errors,
         }
+
         
     def _find_project_root(self) -> str:
         """Walk up from project_path to find Dockerfile."""

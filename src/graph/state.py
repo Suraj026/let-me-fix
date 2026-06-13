@@ -31,16 +31,21 @@ class GraphState(BaseModel):
     # Agent 3 output (Hypothesis)
     hypotheses: list[Hypothesis] = []
 
-    # Phases 2-4 (placeholder types, not used yet)
+    # Phase 4-5 (Investigation + Fix generation)
     investigation_results: list[InvestigationResult] = []
     confirmed_hypothesis: Optional[Hypothesis] = None
-    patch: Optional[str] = None
+    fixed_files: dict[str, str] = {}  # filepath → corrected content (LLM output)
+
+    # Phase 6 (Verification)
     patch_applied: bool = False
     verification: Optional[dict] = None
     retry_count: int = 0
     max_retries: int = 3
     report: Optional[str] = None
-
+    use_sandbox: bool = True
+    custom_command: Optional[str] = None
+    custom_command_dir: Optional[str] = None
+    
     # Streaming and error handling
     trace_events: list[TraceEvent] = []
     error: Optional[str] = None

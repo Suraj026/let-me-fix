@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from src.graph.state import GraphState
-from src.agents.fix import run_fix
+from src.agents.fix import run_fix, _parse_llm_patch
 from src.llm.model import LLMResponse
 from src.models.trace import ErrorSignature
 from src.models.hypothesis import Hypothesis
@@ -30,6 +30,26 @@ def state_with_hypothesis():
         trace_events=[]
     )
 
+
+def test_parse_llm_patch():
+    """_parse_llm_patch extracts file -> content map from ### blocks."""
+    text = """### main.py
+```python
+def add(a, b):
+    return a + b
+```
+### utils.py
+```python
+def helper():
+    pass
+```"""
+    result = _parse_llm_patch(text)
+    assert "main.py" in result
+    assert "def add(a, b):" in result["main.py"]
+    assert "utils.py" in result
+    assert "def helper():" in result["utils.py"]
+
+
 def test_fix_no_hypothesis():
     """Fails when no confirmed hypothesis."""
     state = GraphState(
@@ -40,29 +60,30 @@ def test_fix_no_hypothesis():
     assert result["status"] == "failed"
     assert result["error"] is not None
 
+
 @patch("src.agents.fix.LLMClient")
-def test_fix_generates_patch(mock_llm_cls, state_with_hypothesis):
-    """Returns a patch when LLM responds."""
+def test_fix_generates_fixed_files(mock_llm_cls, state_with_hypothesis):
+    """Returns fixed_files dict when LLM responds with file blocks."""
     mock_instance = MagicMock()
     mock_instance.generate.return_value = LLMResponse(
-        text="--- a/main.py\n+++ b/main.py\n@@ -1,3 +1,3 @@\n-def calculate(a, b):\n+def calculate(a, b):\n+    return int(a) + int(b)",
+        text="### main.py\n```python\ndef process_data(data):\n    if isinstance(data, str):\n        data = len(data)\n    return data * data\n\nif __name__ == '__main__':\n    result = process_data(5)\n    print(result)\n```",
         model="test-model",
     )
     mock_llm_cls.return_value = mock_instance
 
     result = run_fix(state_with_hypothesis)
 
-    assert "patch" in result
-    assert result["patch"] is not None
-    assert len(result["patch"]) > 0
-    assert "--- a/" in result["patch"]
+    assert "fixed_files" in result
+    assert "main.py" in result["fixed_files"]
+    assert "len(data)" in result["fixed_files"]["main.py"]
+
 
 @patch("src.agents.fix.LLMClient")
 def test_fix_emits_milestone(mock_llm_cls, state_with_hypothesis):
-    """Emits milestone trace event with patch info."""
+    """Emits milestone trace event with fix info."""
     mock_instance = MagicMock()
     mock_instance.generate.return_value = LLMResponse(
-        text="--- a/main.py\n+++ b/main.py\n@@ -1 +1 @@\n-1\n+2",
+        text="### main.py\n```python\ndef process_data(data):\n    return int(data) * int(data)\n```",
         model="test-model",
     )
     mock_llm_cls.return_value = mock_instance

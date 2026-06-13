@@ -51,12 +51,14 @@ def run_pipeline(bug_trace: str, project_path: str) -> GraphState:
         return GraphState(**result)
     return result
 
-def stream_pipeline(bug_trace: str, project_path: str):
+def stream_pipeline(bug_trace: str, project_path: str, custom_command: str | None = None, custom_command_dir: str | None = None):
     """Run pipeline with streaming. Yields (node_name, state_update) per node."""
     graph = build_graph()
     initial_state = GraphState(
         bug_trace=bug_trace,
         project_path=project_path,
+        custom_command=custom_command,
+        custom_command_dir=custom_command_dir,
     )
     merged_state = {}
     for event in graph.stream(initial_state):
